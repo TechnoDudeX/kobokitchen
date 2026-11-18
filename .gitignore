@@ -1,0 +1,8 @@
+# downloads (KOReader, NickelMenu, KOReader for Mac), backups of the Kobo's settings, the
+# preview's KOReader profile
+.cache/
+# the Mac preview's pictures
+preview/
+.claude/
+.DS_Store
+node_modules/

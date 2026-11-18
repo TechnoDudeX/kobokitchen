@@ -1,0 +1,30 @@
+{
+  "title": "Our Kitchen",
+  "tagline": "{count} recipes worth keeping",
+  "footer": "made with love {heart}",
+  "textSize": "normal",
+  "font": "handwriting",
+  "cooking": true,
+  "categoryOrder": [
+    "Soups & Stews",
+    "Mains",
+    "Baking",
+    "Snacks"
+  ],
+  "short": {
+    "Soups & Stews": "Soups"
+  },
+  "doodles": {
+    "Soups & Stews": "bowl",
+    "Mains": "flame",
+    "Baking": "cake",
+    "Snacks": "cookie"
+  },
+  "hidden": [],
+  "cover": {
+    "top": "recipes from",
+    "tagline": "cook, share, repeat",
+    "bottom": "made with love {heart}"
+  },
+  "bundleUrl": ""
+}
