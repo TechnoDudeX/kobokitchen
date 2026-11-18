@@ -19,7 +19,10 @@ was off before), and the cook gets one plain sentence about what happened.
 Newer: every latest.json says when it was built ("built", from the computer's clock, not the
 Kobo's). Recipes put on by cable after the website was last updated are newer than the
 website's, so a Wi-Fi update leaves them alone instead of going back to the website's older
-ones. (tools/kitchen-publish.mjs --bump makes the website's the newest again.)
+ones. A damaged file of them is put right from the website if it has the same one (the
+pictures usually are); only a damaged file the website hasn't got lets the website's whole
+edition win, since a whole older edition beats a broken newer one. (tools/kitchen-publish.mjs
+--bump makes the website's the newest again.)
 
 The website is only believed over HTTPS with its certificate checked: signed by an authority
 on KOReader's own list (or the Let's Encrypt roots that come with this app), and made out to
@@ -221,6 +224,14 @@ local function builtBefore(a, b)
     return at ~= nil and bt ~= nil and at < bt
 end
 
+-- Is every file of an edition (as its latest.json lists them) whole in dir?
+local function wholeEdition(dir, files)
+    for _, f in ipairs(files) do
+        if not intact(dir, f) then return false, f.path end
+    end
+    return true
+end
+
 -- What changed between two loaded editions, by recipe name.
 local function differences(old, new)
     local added, changed, gone = {}, {}, {}
@@ -276,7 +287,8 @@ function Sync.update(current_data)
         return nil, "the website's list of recipes doesn't look right"
     end
     local root, cur = Data.root(), Data.currentDir()
-    local have_latest = Data.decodeJSON(Data.readFile(cur .. "/latest.json"))
+    local have_text = Data.readFile(cur .. "/latest.json")
+    local have_latest = Data.decodeJSON(have_text)
     local have = checkedFiles(have_latest)
     local repairing = false
     if have and sameFiles(files, have) then
@@ -291,9 +303,28 @@ function Sync.update(current_data)
     elseif have and builtBefore(latest, have_latest) then
         -- Different recipes, but the Kobo's are newer: put on by cable after the website was
         -- last updated. Going back to the website's would undo them, so they stay.
-        logger.info("kitchen: the website's recipes (built", builtAt(latest), ") are older than the Kobo's (built",
-            builtAt(have_latest), "), so the Kobo keeps its own")
-        return { changed = false, kept_newer = true, edition = have_latest.edition }
+        local whole, broken = wholeEdition(cur, have)
+        if whole then
+            logger.info("kitchen: the website's recipes (built", builtAt(latest) or "(it doesn't say)",
+                ") are older than the Kobo's (built", builtAt(have_latest), "), so the Kobo keeps its own")
+            return { changed = false, kept_newer = true, edition = have_latest.edition }
+        end
+        -- A damaged file the website has too, just the same (usually the pictures: editions share
+        -- them unless the doodles or the cover changed), is put right from there, and the Kobo
+        -- keeps its recipes. A damaged file the website hasn't got: a whole older edition is
+        -- better than a broken newer one.
+        local theirs = {}
+        for _, f in ipairs(files) do theirs[f.path] = f.sha256 end
+        local missing
+        for _, f in ipairs(have) do
+            if theirs[f.path] ~= f.sha256 and not intact(cur, f) then missing = f.path break end
+        end
+        if not missing then
+            logger.warn("kitchen: the Kobo's newer recipes have a damaged file (", broken, "), so it's putting it right from the website")
+            latest, files, text, repairing = have_latest, have, have_text, true
+        else
+            logger.warn("kitchen: the Kobo's newer recipes have a damaged file (", missing, ") the website hasn't got, so it takes the website's")
+        end
     end
 
     local new = root .. "/new"
@@ -524,6 +555,7 @@ end
 Sync._test = {
     checkedFiles = checkedFiles, sameFiles = sameFiles, differences = differences,
     nameCovers = nameCovers, certificateIsFor = certificateIsFor, builtBefore = builtBefore,
+    wholeEdition = wholeEdition,
 }
 
 return Sync

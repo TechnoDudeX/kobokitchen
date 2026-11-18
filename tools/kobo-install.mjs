@@ -392,6 +392,17 @@ const built = buildBundle({ kit });
 if (curLatest && sameFiles(built.latest, curLatest)) {
   note(`Already there: the recipes of ${curLatest.edition} (${built.count} recipes).`);
 } else {
+  // Recipes the Kobo has that these take off, named: from a computer whose recipes.js is out of
+  // date, these would take off newer ones, and with Wi-Fi updates on, "Get new recipes" wouldn't
+  // put them back (recipes put on by cable count as the newest; kitchen-publish.mjs --bump, then
+  // an upload, sends the website's again).
+  let gone = [];
+  try {
+    const theirs = JSON.parse(readFileSync(join(cur, 'recipes.json'), 'utf8')).recipes || {};
+    const ours = JSON.parse(built.files.find((f) => f.path === 'recipes.json').data.toString('utf8')).recipes || {};
+    gone = Object.keys(theirs).filter((slug) => !ours[slug]).map((slug) => (theirs[slug] && theirs[slug].title) || slug);
+  } catch { gone = []; }
+  if (gone.length) note(`Taking off ${gone.length} recipe${gone.length === 1 ? '' : 's'} the Kobo has: ${gone.join(', ')}.`);
   // Built whole in kitchen/new, checked, then swapped in: current -> old, new -> current. (The
   // kitchen puts a swap that was cut off right when it next starts.)
   rmSync(fresh, { recursive: true, force: true });

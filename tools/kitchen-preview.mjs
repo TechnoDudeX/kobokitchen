@@ -14,7 +14,11 @@
 //              bundleUrl), checks every file, swaps them in, and reports the new one
 // --test-wifi  try "Get new recipes" without a website: a stand-in website (a folder on this Mac)
 //              answers instead, first with newer recipes, then with older ones (which the Kobo
-//              must keep its own over), the same ones, and older ones made newest with --bump
+//              must keep its own over), the same ones, and older ones made newest with --bump;
+//              then the Kobo's newer recipes with a damaged picture (put right from the website)
+//              and with damaged recipes (the website's whole edition wins). It also checks that
+//              publishing the same recipes again keeps their date and build time, and that
+//              --bump marks them as the newest
 //
 // It builds a throwaway KOReader profile in .cache/preview-home: the plugin with its fonts, the
 // recipes bundle, the kiosk patch, and a driver patch (tools/kitchen-preview.lua) that walks
@@ -76,14 +80,23 @@ let b;
 if (opts['test-wifi']) {
   // The stand-in website answers at FAKE_URL. The preview's Kobo starts with the last recipe in
   // A to Z missing (built long ago); the website comes in three versions: newer (all of them,
-  // built now), older (without that recipe, built just after the Kobo's), and bumped (without it,
-  // but built after everything else, as kitchen-publish.mjs --bump would make it).
+  // built now), older (without that recipe, built just after the Kobo's), and bumped (older,
+  // marked as the newest as kitchen-publish.mjs --bump does, an hour ahead so it's after "newer"
+  // even within the same second).
   const online = { ...kit, settings: { ...kit.settings, bundleUrl: FAKE_URL } };
   const fewer = { ...online, recipes: online.recipes.slice(0, -1) };
   b = writeBundle(join(HOME, 'kitchen', 'current'), { kit: fewer, edition: new Date(2026, 0, 1, 12), built: '2026-01-01T12:00:00Z' });
   writeBundle(join(SITE, 'newer'), { kit: online });
   writeBundle(join(SITE, 'older'), { kit: fewer, edition: new Date(2026, 0, 2, 12), built: '2026-01-02T12:00:00Z' });
-  writeBundle(join(SITE, 'bumped'), { kit: fewer, built: stamp(new Date(Date.now() + 3600 * 1000)) });
+  // Publishing the same recipes again keeps their date and build time...
+  const again = writeBundle(join(SITE, 'older'), { kit: fewer });
+  if (again.changed || again.latest.edition !== '2026-01-02' || again.latest.built !== '2026-01-02T12:00:00Z') {
+    fail(`writeBundle didn't keep the date and build time of the same recipes (got ${again.latest.edition}, ${again.latest.built}).`);
+  }
+  // ...unless --bump marks them as the newest.
+  cpSync(join(SITE, 'older'), join(SITE, 'bumped'), { recursive: true });
+  const bumped = writeBundle(join(SITE, 'bumped'), { kit: fewer, bump: true, built: stamp(new Date(Date.now() + 3600 * 1000)) });
+  if (!bumped.bumped || bumped.changed || bumped.latest.built <= '2026-01-02T12:00:00Z') fail("writeBundle's bump didn't mark the same recipes as the newest.");
   console.log(`(--test-wifi: the preview's Kobo starts without "${kit.recipes[kit.recipes.length - 1].title}"; a stand-in website answers at ${FAKE_URL})`);
 } else {
   // --stale: the preview's Kobo starts without the last recipe in A to Z (and an older date).

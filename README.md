@@ -227,7 +227,11 @@ From then on, new recipes are: change `recipes.js`, publish, upload, tap Get new
 recipes only takes the website's recipes if they're newer than the Kobo's. So recipes you put on
 by cable after your last publish stay on the Kobo, instead of being swapped back for the website's
 older ones. To send the Kobo the website's recipes anyway (after going back to an older
-`recipes.js`, say), publish with `--bump` and upload again.
+`recipes.js`, say), publish with `--bump` and upload again. Rolling the website back on its own
+(an older upload) doesn't change the Kobo; going back is always "undo it in `recipes.js`, then
+publish with `--bump` and upload". If a file of the Kobo's newer recipes gets damaged, Get new recipes
+puts it right from the website when the website has the same file (the pictures usually are),
+and otherwise takes the website's whole edition.
 
 **Only ever set up Wi-Fi in the kitchen's menu**, never in Kobo's own settings, and don't tap
 Sync there: Kobo's software could then update itself, which can take the Recipes button away.

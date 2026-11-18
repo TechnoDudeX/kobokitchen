@@ -327,7 +327,7 @@ if site and site ~= "" then
             return data
         end
     end
-    local function website(version, want_count, want_said)
+    local function website(version, want_count, want_said, not_said)
         return function(k)
             useStandIn()
             served = version
@@ -337,8 +337,23 @@ if site and site ~= "" then
             local count = want_count == "same" and before or want_count
             if k.data.count ~= count then error(result .. " (wanted " .. count .. " recipes)") end
             if not result:find(want_said, 1, true) then error(result .. ' (wanted "' .. want_said .. '")') end
+            if not_said and result:find(not_said, 1, true) then error(result .. ' (not wanted: "' .. not_said .. '")') end
             return version .. " website: " .. result
         end
+    end
+    -- Changes made to the preview's Kobo itself, before a step (its recipes folder).
+    local function onTheKobo(change)
+        local Data = package.loaded["kitchen/data"]
+        local path = Data.currentDir() .. "/" .. change.file
+        local f = io.open(path, "rb")
+        local text = f and f:read("*a")
+        if f then f:close() end
+        if not text then error("the preview's Kobo has no " .. change.file) end
+        local new = change.edit(text)
+        if new == text then error("couldn't change " .. change.file) end
+        f = io.open(path, "wb")
+        f:write(new)
+        f:close()
     end
     local all -- how many recipes the newer website has: one more than the Kobo starts with
     step("wifi-how-it-works", function(k)
@@ -347,8 +362,32 @@ if site and site ~= "" then
     end)
     step("wifi-newer-website", function(k) return website("newer", all, "1 new: ")(k) end)
     step("wifi-older-website", function(k) return website("older", all, "newer than the website's")(k) end)
-    step("wifi-same-website", function(k) return website("newer", all, "You already have the newest recipes")(k) end)
+    step("wifi-same-website", function(k)
+        return website("newer", all, "You already have the newest recipes", "newer than the website's")(k)
+    end)
     step("wifi-bumped-website", function(k) return website("bumped", all - 1, "1 taken out: ")(k) end)
+    -- The Kobo's edition (bumped: newer than "newer") with a damaged picture that the website has
+    -- too, just the same: it's put right from there and the Kobo keeps its recipes. (Whichever
+    -- picture both have: a kit's pictures are its own.)
+    step("wifi-damaged-picture", function(k)
+        local Data = package.loaded["kitchen/data"]
+        local mine = Data.decodeJSON(Data.readFile(Data.currentDir() .. "/latest.json")) or {}
+        local theirs = Data.decodeJSON(Data.readFile(site .. "/newer/latest.json")) or {}
+        local same = {}
+        for _, x in ipairs(theirs.files or {}) do same[x.path] = x.sha256 end
+        local picture
+        for _, x in ipairs(mine.files or {}) do
+            if x.path:match("^art/.+%.png$") and same[x.path] == x.sha256 then picture = x.path break end
+        end
+        if not picture then return "no picture the website has too, so nothing to damage" end
+        onTheKobo({ file = picture, edit = function() return "not a picture any more" end })
+        return website("newer", all - 1, "put right now")(k) .. " (damaged " .. picture .. ")"
+    end)
+    -- ...with a damaged recipes.json, which the website hasn't got: its whole edition wins.
+    step("wifi-damaged-recipes", function(k)
+        onTheKobo({ file = "recipes.json", edit = function(text) return text:sub(1, #text - 40) end })
+        return website("newer", all, "1 new: ")(k)
+    end)
     step("wifi-message-closed", closeTop)
 else
     -- The real website (book.json's bundleUrl), if there is one.
